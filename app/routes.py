@@ -192,7 +192,7 @@ def capture_payment(payment_id: int):
 @api.post("/payments/<int:payment_id>/void")
 def void_payment(payment_id: int):
     payment = repo().get_payment(payment_id)
-    authorizations.void(repo(), payment)
+    authorizations.void(repo(), payment, clock().now())
     return jsonify(payment_json(payment))
 
 

@@ -1,0 +1,416 @@
+# PayFlow: requisições de exemplo para rodar na mão
+#
+# Precisa da extensão REST Client (humao.rest-client) no VS Code.
+# Suba a API antes:  flask --app app run --debug
+# Depois clique em "Send Request" acima de cada bloco (ou Ctrl+Alt+R).
+#
+# Os dados ficam em memória: quando a API reinicia, os ids voltam a contar do 1
+# e a agenda de recebíveis fica vazia de novo.
+#
+# Swagger UI: http://127.0.0.1:5000/docs
+
+@base = http://127.0.0.1:5000
+@contentType = application/json
+
+# Lojistas cadastrados: 1 (Loja Aurora) e 2 (Café Central)
+@merchant = 1
+
+# Cartões de teste
+@cardOk = 4111111111111111
+@cardOk2 = 5555444433331111
+@cardDeclined = 4000000000000002
+
+
+# ============================================================
+# Documentação
+# ============================================================
+
+### Swagger UI (abre no navegador pelo link do resultado)
+GET {{base}}/docs
+
+### Especificação OpenAPI
+GET {{base}}/openapi.json
+
+
+# ============================================================
+# Lojistas
+# ============================================================
+
+### Dados do lojista
+GET {{base}}/merchants/{{merchant}}
+
+### Lojista inexistente -> 404
+GET {{base}}/merchants/99
+
+### Agenda de recebíveis (ordenada por data de liquidação)
+GET {{base}}/merchants/{{merchant}}/receivables
+
+### Saldo hoje (sem ?date)
+GET {{base}}/merchants/{{merchant}}/balance
+
+### Saldo numa data futura (tudo já liquidado)
+GET {{base}}/merchants/{{merchant}}/balance?date=2026-12-31
+
+### Data inválida -> 400
+GET {{base}}/merchants/{{merchant}}/balance?date=31-12-2026
+
+
+# ============================================================
+# Criação de pagamentos
+# ============================================================
+
+### Crédito 3x, captura imediata -> 201 CAPTURED
+# @name creditoParcelado
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "250.00",
+  "method": "credit",
+  "installments": 3,
+  "card_number": "{{cardOk}}"
+}
+
+### Crédito à vista, captura imediata -> 201 CAPTURED
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "100.00",
+  "method": "credit",
+  "installments": 1,
+  "card_number": "{{cardOk}}"
+}
+
+### Débito -> 201 CAPTURED (liquida em D+1; fim de semana vai para segunda)
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "59.90",
+  "method": "debit",
+  "card_number": "{{cardOk2}}"
+}
+
+### PIX -> 201 CAPTURED (sem cartão; liquida no mesmo dia, inclusive fim de semana)
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 2,
+  "amount": "120.00",
+  "method": "pix"
+}
+
+### Amount como número também é aceito
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": 59.9,
+  "method": "pix"
+}
+
+
+# ============================================================
+# Erros na criação
+# ============================================================
+
+### Cartão terminado em 0002 -> 402 (recusa da operadora)
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "100.00",
+  "method": "credit",
+  "card_number": "{{cardDeclined}}"
+}
+
+### Acima de R$ 5.000,00 -> 402 (limite)
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "5000.01",
+  "method": "credit",
+  "card_number": "{{cardOk}}"
+}
+
+### Método inválido -> 400
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "10.00",
+  "method": "boleto",
+  "card_number": "{{cardOk}}"
+}
+
+### Débito parcelado -> 400 (PIX e débito só aceitam 1 parcela)
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "90.00",
+  "method": "debit",
+  "installments": 2,
+  "card_number": "{{cardOk}}"
+}
+
+### Valor com 3 casas decimais -> 400
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "10.001",
+  "method": "pix"
+}
+
+### Lojista inexistente -> 404
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 9,
+  "amount": "10.00",
+  "method": "pix"
+}
+
+
+# ============================================================
+# Pré-autorização, captura e cancelamento
+# ============================================================
+
+### Pré-autorização (capture: false) -> 201 AUTHORIZED
+# @name preAutorizacao
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "300.00",
+  "method": "credit",
+  "installments": 1,
+  "card_number": "{{cardOk}}",
+  "capture": false
+}
+
+### Detalhe da pré-autorização criada acima
+GET {{base}}/payments/{{preAutorizacao.response.body.$.id}}
+
+### Captura parcial da pré-autorização acima -> 200 CAPTURED
+POST {{base}}/payments/{{preAutorizacao.response.body.$.id}}/capture
+Content-Type: {{contentType}}
+
+{
+  "amount": "180.00"
+}
+
+### Captura total (sem corpo) — use em OUTRA pré-autorização
+POST {{base}}/payments/2/capture
+
+### Captura acima do autorizado -> 400
+POST {{base}}/payments/2/capture
+Content-Type: {{contentType}}
+
+{
+  "amount": "999999.00"
+}
+
+### Capturar algo que já foi capturado -> 409
+POST {{base}}/payments/1/capture
+
+### Cancelar uma pré-autorização -> 200 VOIDED
+# @name novaPreAutorizacao
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "400.00",
+  "method": "credit",
+  "card_number": "{{cardOk}}",
+  "capture": false
+}
+
+###
+POST {{base}}/payments/{{novaPreAutorizacao.response.body.$.id}}/void
+
+### Cancelar de novo -> 409
+POST {{base}}/payments/{{novaPreAutorizacao.response.body.$.id}}/void
+
+
+# ============================================================
+# Estornos
+# ============================================================
+
+### Estorno parcial -> 200 PARTIALLY_REFUNDED (debita a agenda no mesmo dia)
+POST {{base}}/payments/{{creditoParcelado.response.body.$.id}}/refund
+Content-Type: {{contentType}}
+
+{
+  "amount": "25.00"
+}
+
+### Estorno do saldo restante (sem corpo) -> 200 REFUNDED
+POST {{base}}/payments/{{creditoParcelado.response.body.$.id}}/refund
+
+### Estorno acima do capturado -> 409
+POST {{base}}/payments/{{creditoParcelado.response.body.$.id}}/refund
+Content-Type: {{contentType}}
+
+{
+  "amount": "999999.00"
+}
+
+### Estornar um pagamento não capturado -> 409
+POST {{base}}/payments/{{preAutorizacao.response.body.$.id}}/refund
+
+
+# ============================================================
+# Idempotência (Idempotency-Key)
+# ============================================================
+
+### 1ª tentativa com a chave -> 201
+POST {{base}}/payments
+Content-Type: {{contentType}}
+Idempotency-Key: pedido-1
+
+{
+  "merchant_id": 1,
+  "amount": "250.00",
+  "method": "credit",
+  "installments": 3,
+  "card_number": "{{cardOk}}"
+}
+
+### Mesma chave, mesmo corpo -> 200 com o pagamento original (não cobra de novo)
+POST {{base}}/payments
+Content-Type: {{contentType}}
+Idempotency-Key: pedido-1
+
+{
+  "merchant_id": 1,
+  "amount": "250.00",
+  "method": "credit",
+  "installments": 3,
+  "card_number": "{{cardOk}}"
+}
+
+### Mesma chave, corpo diferente -> 422
+POST {{base}}/payments
+Content-Type: {{contentType}}
+Idempotency-Key: pedido-1
+
+{
+  "merchant_id": 1,
+  "amount": "99.00",
+  "method": "credit",
+  "installments": 3,
+  "card_number": "{{cardOk}}"
+}
+
+### A chave vale por lojista: mesma chave no lojista 2 -> 201
+POST {{base}}/payments
+Content-Type: {{contentType}}
+Idempotency-Key: pedido-1
+
+{
+  "merchant_id": 2,
+  "amount": "70.00",
+  "method": "pix"
+}
+
+### Tentativa recusada com uma chave nova (402)
+POST {{base}}/payments
+Content-Type: {{contentType}}
+Idempotency-Key: pedido-2
+
+{
+  "merchant_id": 1,
+  "amount": "100.00",
+  "method": "credit",
+  "card_number": "{{cardDeclined}}"
+}
+
+### Repetição da chave acima com o cartão corrigido
+POST {{base}}/payments
+Content-Type: {{contentType}}
+Idempotency-Key: pedido-2
+
+{
+  "merchant_id": 1,
+  "amount": "100.00",
+  "method": "credit",
+  "card_number": "{{cardOk}}"
+}
+
+
+# ============================================================
+# Antifraude (3 recusas com o mesmo cartão em até 10 min)
+# ============================================================
+# Envie os três blocos abaixo em sequência; depois disso o cartão
+# 4000000000000002 fica bloqueado por 1 hora (429) nesta instância da API.
+
+### Recusa 1 -> 402
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "10.00",
+  "method": "credit",
+  "card_number": "{{cardDeclined}}"
+}
+
+### Recusa 2 -> 402
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "10.00",
+  "method": "credit",
+  "card_number": "{{cardDeclined}}"
+}
+
+### Recusa 3 -> 402 (a partir daqui o cartão está bloqueado)
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "10.00",
+  "method": "credit",
+  "card_number": "{{cardDeclined}}"
+}
+
+### 4ª tentativa com o cartão bloqueado -> 429
+POST {{base}}/payments
+Content-Type: {{contentType}}
+
+{
+  "merchant_id": 1,
+  "amount": "10.00",
+  "method": "credit",
+  "card_number": "{{cardDeclined}}"
+}
+
+
+# ============================================================
+# Rotinas
+# ============================================================
+
+### Expiração das autorizações pendentes com 7 dias ou mais
+# Fora dos testes a API usa o relógio real, então aqui normalmente
+# devolve {"expired": []}.
+POST {{base}}/jobs/expire-authorizations

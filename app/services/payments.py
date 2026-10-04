@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from decimal import Decimal
 
-from app.errors import InvalidPayment, InvalidTransition, PaymentDeclined, RefundNotAllowed
+from app.errors import CardBlocked, InvalidPayment, InvalidTransition, PaymentDeclined, RefundNotAllowed
 from app.models import Method, Payment, Status
 from app.repository import Repository
 from app.services import antifraud, authorizations, idempotency, issuer, settlement
@@ -39,6 +39,14 @@ def create_payment(
     try:
         payment = _process(repo, now, request)
     except PaymentDeclined:
+        if record is not None:
+            idempotency.release(repo, request.merchant_id, idempotency_key)
+        raise
+    except InvalidPayment:
+        if record is not None:
+            idempotency.release(repo, request.merchant_id, idempotency_key)
+        raise
+    except CardBlocked:
         if record is not None:
             idempotency.release(repo, request.merchant_id, idempotency_key)
         raise

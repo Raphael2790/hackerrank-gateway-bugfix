@@ -6,7 +6,7 @@ from app.repository import Repository
 from app.services import fees
 
 CENT = Decimal("0.01")
-SATURDAY, SUNDAY = 6, 7
+SATURDAY, SUNDAY = 5, 6
 CREDIT_INTERVAL = timedelta(days=30)
 
 

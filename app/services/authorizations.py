@@ -12,6 +12,7 @@ AUTHORIZATION_TTL = timedelta(days=7)
 def capture(repo: Repository, payment: Payment, now: datetime, amount: Decimal | None = None) -> Payment:
     """Captura total ou parcial. O que não for capturado é liberado no cartão do cliente."""
     _ensure_authorized(payment, "capturado")
+    _ensure_not_expired(payment, now)
     amount = payment.amount if amount is None else amount
     if amount > payment.amount:
         raise InvalidPayment("Valor da captura maior que o autorizado")
@@ -20,9 +21,10 @@ def capture(repo: Repository, payment: Payment, now: datetime, amount: Decimal |
     return payment
 
 
-def void(repo: Repository, payment: Payment) -> Payment:
+def void(repo: Repository, payment: Payment, now: datetime) -> Payment:
     """Cancela uma autorização que ainda não foi capturada."""
     _ensure_authorized(payment, "cancelado")
+    _ensure_not_expired(payment, now)
     _close(repo, payment, Status.VOIDED)
     return payment
 
@@ -30,7 +32,7 @@ def void(repo: Repository, payment: Payment) -> Payment:
 def expire_stale(repo: Repository, now: datetime) -> list[Payment]:
     """Rotina diária: expira as autorizações pendentes há 7 dias ou mais."""
     expired = []
-    for payment in repo.pending_authorizations:
+    for payment in repo.pending_authorizations[:]:
         if now - payment.created_at >= AUTHORIZATION_TTL:
             _close(repo, payment, Status.EXPIRED)
             expired.append(payment)
@@ -40,6 +42,11 @@ def expire_stale(repo: Repository, now: datetime) -> list[Payment]:
 def _ensure_authorized(payment: Payment, action: str) -> None:
     if payment.status is not Status.AUTHORIZED:
         raise InvalidTransition(f"Pagamento {payment.status.value} não pode ser {action}")
+
+
+def _ensure_not_expired(payment: Payment, now: datetime) -> None:
+    if now - payment.created_at > AUTHORIZATION_TTL:
+        raise InvalidTransition("Autorização expirada")
 
 
 def _close(repo: Repository, payment: Payment, status: Status) -> None:
