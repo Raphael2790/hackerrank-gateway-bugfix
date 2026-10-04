@@ -235,14 +235,16 @@ Dicas:
 
 - Abra **esta pasta** como raiz no VS Code (Arquivo > Abrir Pasta... > `hackerrank-gateway-bugfix`) ou rode
   `claude` de dentro dela. As travas abaixo só valem para sessões iniciadas aqui.
-- O `CLAUDE.md` transforma o Claude Code num tutor: ele não lê os testes ocultos nem o gabarito, não edita arquivos
-  e não te dá a resposta. Ele faz perguntas, explica conceitos e revisa o seu raciocínio. Dicas são por nível e por
-  chamado: peça `dica 1 #2214`, depois `dica 2 #2214`, e assim por diante (vão até o nível 4; a correção é sempre
-  sua).
+- O `CLAUDE.md` faz do Claude Code um par de programação que **escreve código para você** (testes de reprodução,
+  prints de investigação e as correções que você decidir) e **dá dicas**, mas **não entrega as respostas** (qual é
+  o bug, onde está, qual é a correção) e **não lê** os testes ocultos, o gabarito nem os rastros da criação do
+  desafio. Dicas são por nível e por chamado: peça `dica 1 #2214`, depois `dica 2 #2214`, e assim por diante (vão
+  até o nível 4; a correção é sempre decisão sua).
 - Travas técnicas, além das instruções: `.claude/settings.json` bloqueia a leitura de `hidden_tests/`,
-  `.gabarito/` e dos rastros da criação do desafio, e bloqueia edição de arquivos e acesso à web; o hook
-  `.claude/hooks/trava_treino.py` barra comandos que citem essas pastas ou façam buscas recursivas pelo terminal;
-  o `.ignore` tira essas pastas das buscas (inclusive do Ctrl+Shift+F do VS Code).
+  `.gabarito/` e dos rastros da criação do desafio, e bloqueia a edição dos testes, do `conftest.py`, do
+  `pytest.ini` e das próprias travas; o hook `.claude/hooks/trava_treino.py` barra comandos e arquivos que citem
+  essas pastas ou façam buscas recursivas pelo terminal; o `.ignore` tira essas pastas das buscas (inclusive do
+  Ctrl+Shift+F do VS Code).
 - Para conferir se está tudo ativo: no Claude Code, rode `/permissions` (devem aparecer as regras de "deny") e
   `/hooks` (deve aparecer o `PreToolUse`). Depois peça "leia hidden_tests/test_hidden.py": ele deve recusar ou ser
   bloqueado.

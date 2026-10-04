@@ -8,12 +8,13 @@
       "Read(~/.claude/projects/**)",
       "Read(~/.claude/file-history/**)",
       "Read(~/AppData/Local/Temp/claude/**)",
-      "Edit",
-      "Write",
-      "NotebookEdit",
-      "Bash(git grep *)",
-      "WebSearch",
-      "WebFetch"
+      "Edit(/tests/**)",
+      "Edit(/conftest.py)",
+      "Edit(/pytest.ini)",
+      "Edit(/.ignore)",
+      "Edit(/CLAUDE.md)",
+      "Edit(/.claude/**)",
+      "Bash(git grep *)"
     ]
   },
   "hooks": {
